@@ -1,0 +1,86 @@
+# CONFIGURATION FOR REMOTE TESTS #
+
+title: 'test_on_00'
+tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
+seed: 47
+# model configuration
+model:
+  # model class, supported values: PadUNet, DeepLab, CAE, AE
+  name: CAE
+
+# trainer configuration
+trainer:
+  # path to the checkpoint directory
+  checkpoint_path: null
+  # skip train or do train?
+  do_train: False
+  # how many iterations between validations
+  validate_after_iters: 2
+  # max number of epochs
+  epochs: 100
+
+# optimizer configuration
+optimizer:
+  # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
+  name: SGD
+  # initial learning rate
+  learning_rate: 0.1
+  # weight decay
+  weight_decay: 0
+
+# loss function configuration
+loss:
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard, DiceLossv2, TopoLoss
+  name:
+    - DiceLossv2
+
+lr_scheduler:
+  # MultiStepLR, Plateau, null, ...
+  name: Plateau
+
+
+data-loader:
+  # data loaders configuration
+  batch_size: 64
+  num_workers: 0
+  file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
+  sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
+  split_filepath: '/homes/mcipriano/projects/alveolar_canal_2D_CAE/configs/fake_splits.json'
+  volumes_max: 2100
+  volumes_min: 0
+
+  mean: 0.08435
+  std: 0.17885
+  # create arch line and set to zero all the values out of the arch
+  background_suppression: False
+
+#  weights:  # for two classes
+#    - 7.03e-04
+#    - 9.99e-01
+  weights:  # for 3 classes
+    - 4.5132e-01
+    - 5.4842e-01
+    - 2.5372e-04
+
+  warm_up_length: 0
+
+  # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
+  resize_shape:
+    - 160
+    - 320
+    - 384
+
+#  labels:
+#    UNLABELED: 3
+#    BACKGROUND: 2
+#    INSIDE: 1
+#    CONTOUR: 0
+
+  labels:
+    BACKGROUND: 0
+    INSIDE: 1
+
+  split_volumes:
+    - 1
+    - 320
+    - 2

@@ -1,0 +1,87 @@
+# CONFIGURATION FOR LOCAL TESTS #
+title: 'test'
+tb_dir: 'Y:\work\runs'
+seed: 47
+# model configuration
+model:
+  # model class, supported values: PadUNet
+  name: PadUNet
+  sharding: False
+
+# trainer configuration
+trainer:
+  # path to the checkpoint directory
+  checkpoint_path: null
+  # skip train or do train?
+  do_train: True
+  # how many iterations between validations
+  validate_after_iters: 2
+  # max number of epochs
+  epochs: 70
+
+# optimizer configuration
+optimizer:
+  # type of optimizer. if None, Adam is used by default. possible values: SGD, Adam, None
+  name: SGD
+  # initial learning rate
+  learning_rate: 0.1
+  # weight decay
+  weight_decay: 0
+
+# loss function configuration
+loss:
+  # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard
+  name:
+    - Jaccard
+
+lr_scheduler:
+  # MultiStepLR, Plateau, null, ...
+  name: Plateau
+
+
+data-loader:
+  # data loaders configuration
+  batch_size: 1
+  num_workers: 0
+  split_filepath: 'Y:\work\projects\alveolar_canal_3Dtraining\configs\splits.json'
+  file_paths: 'Y:\work\datasets\maxillo\VOLUMES\'
+
+  # create arch line and set to zero all the values out of the arch
+  background_suppression: False
+  mean: 0.4276
+  std: 0.1615
+  weights:
+    - 7.03e-04
+    - 9.99e-01
+
+  warm_up_length: 0
+
+  # KEEP IN MIND: SCALE RATIOS SHOULD BE AROUND (0.4568, 0.8733, 1)
+  resize_shape:
+    - 64
+    - 128
+    - 144
+
+    #  weights:  # for two classes
+    #    - 7.03e-04
+    #    - 9.99e-01
+
+    weights:  # for 3 classes
+      - 4.5132e-01
+      - 5.4842e-01
+      - 2.5372e-04
+
+    labels:
+      #    UNLABELED: 3
+      BACKGROUND: 2
+      INSIDE: 1
+      CONTOUR: 0
+
+  #  labels:
+  #    BACKGROUND: 0
+  #    INSIDE: 1
+
+  split_volumes:
+    - 1
+    - 1
+    - 2
