@@ -24,7 +24,7 @@ def save_weights(epoch, model, optim, score, path):
         'epoch': epoch,
         'state_dict': model.state_dict(),
         'optimizer': optim.state_dict(),
-        'metric': score
+        'metric': score,
     }
     torch.save(state, path)
 
@@ -140,30 +140,31 @@ def main(experiment_name):
 
             epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
 
-            val_metric = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator, loader_config, writer=writer)
-            writer.add_scalar('Metric/validation', val_metric, epoch)
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric: {val_metric}')
+            val_iou, val_dice = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator, loader_config, writer=writer)
+            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
+            writer.add_scalar('Metric/validation', val_iou, epoch)
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
-                    scheduler.step(val_metric)
+                    scheduler.step(val_iou)
                 else:
                     scheduler.step(current_epoch)
 
-            if val_metric > best_metric:
-                best_metric = val_metric
+            if val_iou > best_metric:
+                best_metric = val_iou
                 save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
 
-            if val_metric < 1e-05 and epoch > 10:
+            if val_iou < 1e-05 and epoch > 10:
                 logging.info('drop in performances detected. aborting the experiment')
                 return 0
             else:  # save current weights for debug, overwrite the same file
-                save_weights(epoch, model, optimizer, val_metric, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+                save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
             if epoch % 5 == 0:
-                test_score = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator, loader_config)
-                logging.info(f'TEST Epoch [{epoch}] - Mean Metric: {test_score}')
-                writer.add_scalar('Metric/Test', test_score, epoch)
+                test_iou, test_dice = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator, loader_config)
+                logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
+                writer.add_scalar('Metric/Test', test_iou, epoch)
+                writer.add_scalar('Metric/Test_dice', test_dice, epoch)
 
         logging.info('BEST METRIC IS {}'.format(best_metric))
     else:
@@ -181,7 +182,8 @@ def main(experiment_name):
         final_mean=False
     )
     logging.info(f'final metric list: {test_scores}')
-    logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
+    if len(test_scores) > 0:
+        logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
     if vol_writer is not None:
         logging.info("going to create zip archive. wait the end of the run pls")
         vol_writer.save_zip()

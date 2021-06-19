@@ -151,6 +151,8 @@ def load_model(config):
         return UNet(num_classes=num_classes)
     elif name == 'PadUNet':
         return PadUNet(num_classes=num_classes)
+    elif name == 'PadUNetSparse':
+        return PadUNet(num_classes=num_classes, in_ch=2)
     elif model_config['name'] == 'DeepLab':
         return DeepLab(class_num=num_classes)
     else:

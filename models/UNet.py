@@ -52,10 +52,10 @@ class _DecoderBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, in_ch=3):
         super(UNet, self).__init__()
         self.name = 'U-Net'
-        self.enc1 = _EncoderBlock(3, 64)
+        self.enc1 = _EncoderBlock(in_ch, 64)
         self.enc2 = _EncoderBlock(64, 128)
         self.enc3 = _EncoderBlock(128, 256)
         self.enc4 = _EncoderBlock(256, 512, dropout=True)

@@ -52,10 +52,11 @@ class _DecoderBlock(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, in_ch=3):
         super(UNet, self).__init__()
         self.name = 'U-Net'
-        self.enc1 = _EncoderBlock(3, 64)
+        self.in_ch = in_ch
+        self.enc1 = _EncoderBlock(in_ch, 64)
         self.enc2 = _EncoderBlock(64, 128)
         self.enc3 = _EncoderBlock(128, 256)
         self.enc4 = _EncoderBlock(256, 512, dropout=True)
@@ -75,6 +76,10 @@ class UNet(nn.Module):
         initialize_weights(self)
 
     def forward(self, x, sparse):
+
+        if self.in_ch == 2:
+            x = torch.stack((x[:, 0], sparse[:, 0]), dim=1)
+
         enc1 = self.enc1(x)
         enc2 = self.enc2(enc1)
         enc3 = self.enc3(enc2)

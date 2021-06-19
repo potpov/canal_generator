@@ -63,7 +63,7 @@ def test(model, test_loader, splitter, epoch, evaluator, config, writer=None, du
                 labels = labels.squeeze()
                 images = images.numpy()
 
-                evaluator.iou(output, labels)
+                evaluator.compute_metrics(output, labels)
 
                 # TB DUMP
                 if writer is not None:
@@ -102,9 +102,9 @@ def test(model, test_loader, splitter, epoch, evaluator, config, writer=None, du
 
     assert len(whole_output) == 0, "something wrong here"
     if final_mean:
-        epoch_val_metric = evaluator.mean_metric()
-        return epoch_val_metric
+        epoch_iou, epoch_dice = evaluator.mean_metric()
+        return epoch_iou, epoch_dice
     else:
-        return evaluator.metric_list
+        return evaluator.iou_list
 
 
