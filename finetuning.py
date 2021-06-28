@@ -3,23 +3,17 @@ import os
 from tqdm import tqdm
 import torch
 import torch.utils.data as data
-from torch.utils.data import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import utils
-from dataset import AlveolarDataloader
+from loaders.Loader2D import AlveolarDataloader
 from eval import Eval as Evaluator
 from losses import LossFn
 from test import test
-from train import train
 import sys
 import logging
 import torch.nn as nn
-import yaml
 import numpy as np
-from os import path
 import socket
-from skimage import measure
-from matplotlib import pyplot as plt
 import torchvision
 
 RESULTS_DIR = r'Y:\work\results' if socket.gethostname() == 'DESKTOP-I67J6KK' else r'/nas/softechict-nas-2/mcipriano/results/maxillo/3D'

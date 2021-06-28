@@ -14,7 +14,7 @@ from utils import Splitter
 
 class AlveolarDataloader(Dataset):
 
-    def __init__(self, config, tuning=False):
+    def __init__(self, config):
         """
         data loader
         :param config: yaml file

@@ -1,5 +1,6 @@
 import logging
 import os
+import torchio as tio
 from matplotlib import pyplot as plt
 import numpy as np
 from os import listdir
@@ -7,10 +8,8 @@ from os.path import isfile, join
 import re
 import cv2
 import yaml
-import torch.nn as nn
-import torch
-import math
-from models.UNet import UNet
+from torch.utils.data import SubsetRandomSampler
+import torch.utils.data as data
 from models.PadUNet import UNet as PadUNet
 from models.Deeplab.decoder import DeepLab
 from models.CAE import CAE, AE
@@ -20,7 +19,7 @@ from Jaw import Jaw
 import torch
 import zipfile
 import json
-
+from models.PadUNet3D import TransUNet3D
 
 
 def create_split(dataset_path):
@@ -126,7 +125,70 @@ def set_logger(log_path=None):
 
 
 def load_config_yaml(config_file):
-    return yaml.safe_load(open(config_file, 'r'))
+    return yaml.load(open(config_file, 'r'), yaml.FullLoader)
+
+
+def load_dataset(config, train_type="2D"):
+
+    from loaders.Loader2D import AlveolarDataloader
+    from loaders.Loader3D import NewLoader
+
+    loader_config = config.get('data-loader', None)
+    train_config = config.get('trainer', None)
+
+    if train_type == "2D":
+        alveolar_data = AlveolarDataloader(config=loader_config)
+        train_id, test_id, val_id = alveolar_data.split_dataset()
+        splitter = alveolar_data.get_splitter()
+        train_loader = data.DataLoader(
+            alveolar_data,
+            batch_size=loader_config['batch_size'],
+            sampler=SubsetRandomSampler(train_id),
+            num_workers=loader_config['num_workers'],
+            pin_memory=True,
+            drop_last=True,
+        )
+        test_loader = data.DataLoader(
+            alveolar_data,
+            batch_size=loader_config['batch_size'],
+            sampler=test_id,
+            num_workers=loader_config['num_workers'],
+            pin_memory=True,
+            drop_last=False,
+            collate_fn=alveolar_data.custom_collate
+        )
+
+        val_loader = data.DataLoader(
+            alveolar_data,
+            batch_size=loader_config['batch_size'],
+            sampler=val_id,
+            num_workers=loader_config['num_workers'],
+            pin_memory=True,
+            drop_last=False,
+            collate_fn=alveolar_data.custom_collate
+        )
+    elif train_type == "3D":
+        data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
+        train_d, test_d, val_d = data_utils.split_dataset()
+        splitter = None
+        samples_per_volume = int(
+            np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
+
+        train_queue = tio.Queue(
+            train_d,
+            max_length=samples_per_volume * 4,  # queue len
+            samples_per_volume=samples_per_volume,
+            sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'),
+                                           loader_config.get('grid_overlap', 0)),
+            num_workers=loader_config['num_workers'],
+        )
+        train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0)
+        test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
+        val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
+    else:
+        raise Exception(f"type {train_type} not recognized!")
+
+    return train_loader, test_loader, val_loader, splitter
 
 
 def load_model(config):
@@ -143,18 +205,24 @@ def load_model(config):
 
     if name == 'CAE':
         emb_shape = [dim // 64 for dim in loader_config['resize_shape'][-2:]]
-        return CAE(num_classes, emb_shape)
+        return CAE(num_classes, emb_shape), "2D"
     elif name == 'AE':
         emb_shape = [dim // 64 for dim in loader_config['resize_shape'][-2:]]
-        return AE(num_classes, emb_shape)
+        return AE(num_classes, emb_shape), "2D"
     if name == 'UNet':
-        return UNet(num_classes=num_classes)
+        return UNet(num_classes=num_classes), "2D"
+    elif name == 'transUNet3D':
+        emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
+        return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape), "3D"
+    elif name == 'transUNet3DSparse':
+        emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
+        return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape, in_ch=2), "3D"
     elif name == 'PadUNet':
-        return PadUNet(num_classes=num_classes)
+        return PadUNet(num_classes=num_classes), "2D"
     elif name == 'PadUNetSparse':
-        return PadUNet(num_classes=num_classes, in_ch=2)
+        return PadUNet(num_classes=num_classes, in_ch=2), "2D"
     elif model_config['name'] == 'DeepLab':
-        return DeepLab(class_num=num_classes)
+        return DeepLab(class_num=num_classes), "2D"
     else:
         raise Exception("Model not found, check the config.yaml")
 

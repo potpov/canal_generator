@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse
-  name: PadUNetSparse
+  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse, transUNet3DSparse, transUNet3D
+  name: transUNet3D
 
 # trainer configuration
 trainer:
@@ -32,7 +32,7 @@ optimizer:
 loss:
   # current supported loss are: BCEWithLogitsLoss, CrossEntropyLoss, DiceLoss, Jaccard, DiceLossv2, TopoLoss
   name:
-    - DiceLossv2
+    - Jaccard
 
 lr_scheduler:
   # MultiStepLR, Plateau, null, ...
@@ -41,7 +41,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 32
+  batch_size: 1
   num_workers: 0
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
@@ -69,6 +69,11 @@ data-loader:
     - 160
     - 320
     - 384
+
+  patch_shape:
+    - 24
+    - 240
+    - 240
 
 #  labels:
 #    UNLABELED: 3

@@ -6,15 +6,13 @@ import torch.utils.data as data
 from torch.utils.data import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 import utils
-from dataset import AlveolarDataloader
 from eval import Eval as Evaluator
 from losses import LossFn
-from test import test
-from train import train
+from test import test2D, test3D
+from train import train2D, train3D
 import sys
 import logging
 import torch.nn as nn
-import yaml
 import numpy as np
 from os import path
 import socket
@@ -42,7 +40,7 @@ def main(experiment_name):
     model_config = config.get('model')
 
     num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
-    model = utils.load_model(config)
+    model, data_type = utils.load_model(config)
 
     ngpus = torch.cuda.device_count()
     logging.info("going to use {} GPUs".format(ngpus))
@@ -79,38 +77,9 @@ def main(experiment_name):
 
     evaluator = Evaluator(loader_config)
 
-    alveolar_data = AlveolarDataloader(config=loader_config)
-    train_id, test_id, val_id = alveolar_data.split_dataset()
+    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, data_type)
 
-    train_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=SubsetRandomSampler(train_id),
-        num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=True,
-    )
-    test_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=test_id,
-        num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=False,
-        collate_fn=alveolar_data.custom_collate
-    )
-
-    val_loader = data.DataLoader(
-        alveolar_data,
-        batch_size=loader_config['batch_size'],
-        sampler=val_id,
-        num_workers=loader_config['num_workers'],
-        pin_memory=True,
-        drop_last=False,
-        collate_fn=alveolar_data.custom_collate
-    )
-
-    loss = LossFn(config.get('loss'), loader_config, weights=alveolar_data.get_weights())
+    loss = LossFn(config.get('loss'), loader_config, weights=None)
 
     current_epoch = 0
     if train_config['checkpoint_path'] is not None:
@@ -138,9 +107,13 @@ def main(experiment_name):
 
         for epoch in range(current_epoch, train_config['epochs']):
 
-            epoch_loss, _ = train(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
+            if data_type == "2D":
+                epoch_loss, _ = train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
+                val_iou, val_dice = test2D(model, val_loader, splitter, epoch, evaluator, loader_config, writer=writer)
+            else:
+                epoch_loss, _ = train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train")
+                val_iou, val_dice = test3D(model, val_loader, epoch, evaluator, loader_config, writer=writer)
 
-            val_iou, val_dice = test(model, val_loader, alveolar_data.get_splitter(), epoch, evaluator, loader_config, writer=writer)
             logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
             writer.add_scalar('Metric/validation', val_iou, epoch)
 
@@ -161,7 +134,10 @@ def main(experiment_name):
                 save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
 
             if epoch % 5 == 0:
-                test_iou, test_dice = test(model, test_loader, alveolar_data.get_splitter(), train_config['epochs'] + 1, evaluator, loader_config)
+                if data_type == "2D":
+                    test_iou, test_dice = test2D(model, test_loader, splitter, train_config['epochs'] + 1, evaluator, loader_config)
+                else:
+                    test_iou, test_dice = test3D(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
                 logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
                 writer.add_scalar('Metric/Test', test_iou, epoch)
                 writer.add_scalar('Metric/Test_dice', test_dice, epoch)
@@ -170,17 +146,12 @@ def main(experiment_name):
     else:
         writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name))  # do not purge if no training was performed
 
-    test_scores = test(
-        model,
-        test_loader,
-        alveolar_data.get_splitter(),
-        train_config['epochs'],
-        evaluator,
-        loader_config,
-        writer=writer,
-        dumper=vol_writer,
-        final_mean=False
-    )
+    if data_type == "2D":
+        test_scores = test2D(model, test_loader, splitter, train_config['epochs'], evaluator, loader_config, writer=writer, dumper=vol_writer, final_mean=False)
+    else:
+        test_scores = test3D(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None,
+                              dumper=vol_writer, skip_mean=True)
+
     logging.info(f'final metric list: {test_scores}')
     if len(test_scores) > 0:
         logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
