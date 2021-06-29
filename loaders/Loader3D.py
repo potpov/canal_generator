@@ -14,20 +14,18 @@ import utils
 
 class NewLoader():
 
-    def __init__(self, config, do_train=True, use_syntetic=True):
+    def __init__(self, config, do_train=True):
 
         self.config = config
 
         self.subjects = {
             'train': [],
-            'syntetic': [],
             'test': [],
             'val': []
         }
 
         self.DEBUG = []
         self.do_train = do_train
-        self.use_syntetic = use_syntetic
 
         self.dicom_max = config.get('volumes_max', 2100)
         self.dicom_min = config.get('volumes_min', 0)
@@ -50,7 +48,7 @@ class NewLoader():
         gt_filename = 'gt_4labels.npy' if 'CONTOUR' in self.config['labels'] else 'gt_alpha.npy'
 
         for partition, folders in folder_splits.items():
-            logging.info(f"loading data for {partition}")
+            logging.info(f"loading data for {partition}, tot: ({len(folders)}")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
                 data_path = os.path.join(config['file_path'], folder, 'data.npy')
@@ -107,7 +105,7 @@ class NewLoader():
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
         if sparse.ndim == 3: sparse = sparse.reshape(1, *sparse.shape)
 
-        if partition in ['train', 'syntetic']:
+        if partition in ['train']:
             gt = CenterPad(new_shape)(gt)
             gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
             if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
@@ -148,7 +146,7 @@ class NewLoader():
             raise Exception('no valid sampling type provided')
 
     def split_dataset(self, rank=0, world_size=1):
-        training_set = self.subjects['train'] + self.subjects['syntetic']
+        training_set = self.subjects['train']
         train = tio.SubjectsDataset(training_set[rank::world_size], transform=self.transforms) if self.do_train else None
         # logging.info("using the following augmentations: ", train[0].history)
 

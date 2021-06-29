@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse, transUNet3DSparse, transUNet3D
-  name: transUNet3D
+  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse
+  name: transUNet3DSparse
 
 # trainer configuration
 trainer:
@@ -41,7 +41,7 @@ lr_scheduler:
 
 data-loader:
   # data loaders configuration
-  batch_size: 1
+  batch_size: 2
   num_workers: 0
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
@@ -71,9 +71,9 @@ data-loader:
     - 384
 
   patch_shape:
-    - 24
-    - 240
-    - 240
+    - 120
+    - 120
+    - 120
 
 #  labels:
 #    UNLABELED: 3
