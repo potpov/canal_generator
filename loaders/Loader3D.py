@@ -95,6 +95,8 @@ class NewLoader():
         new_shape = np.array((D, H, W)) / pad_factor
         new_shape = np.round(new_shape).astype(np.int)
 
+        data = utils.aided_background_suppression(data, sparse)
+
         data = CenterPad(new_shape)(data)
         data = Rescale(size=self.reshape_size)(data)
 

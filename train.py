@@ -5,12 +5,12 @@ from torch import nn
 import torchio as tio
 
 
-def train2D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, warmup):
+def train2D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, type='Train', warmup=1):
 
     model.train()
     evaluator.reset_eval()
     losses = []
-    for i, (images, labels, sparse_gt, _) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
+    for i, (images, labels, sparse_gt, names) in tqdm(enumerate(train_loader), total=len(train_loader), desc='train epoch {}'.format(str(epoch))):
 
         images = images.cuda()
         labels = labels.cuda()
@@ -39,19 +39,20 @@ def train2D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, w
             outputs = outputs.squeeze().cpu().detach().numpy()  # BS, H, W
 
         labels = labels.squeeze().cpu().numpy()  # BS, Z, H, W
-        evaluator.compute_metrics(outputs, labels)
+        evaluator.compute_metrics(outputs, labels, images, names, type)
 
     epoch_train_loss = sum(losses) / len(losses)
-    epoch_iou, epoch_dice = evaluator.mean_metric()
+    epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None:
-        writer.add_scalar('Loss/train', epoch_train_loss, epoch)
-        writer.add_scalar('Metric/train', epoch_iou, epoch)
+        writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
+        writer.add_scalar(f'{type}', epoch_iou, epoch)
 
     logging.info(
-        f'Train Epoch [{epoch}], '
-        f'Train Mean Loss: {epoch_train_loss}, '
-        f'Train Mean Metric: {epoch_iou}'
-        f'Train Mean Metric (Dice): {epoch_dice}'
+        f'{type} Epoch [{epoch}], '
+        f'{type} Mean Loss: {epoch_train_loss}, '
+        f'{type} Mean Metric (IoU): {epoch_iou}'
+        f'{type} Mean Metric (Dice): {epoch_dice}'
+        f'{type} Mean Metric (haus): {epoch_haus}'
     )
 
     return epoch_train_loss, epoch_iou
@@ -85,20 +86,21 @@ def train3D(model, train_loader, loss_fn, optimizer, epoch, writer, evaluator, t
             outputs[outputs != 1] = 0
             outputs = outputs.squeeze().cpu().detach().numpy()  # BS, Z, H, W
 
-        labels = labels.cpu().numpy()  # BS, Z, H, W
-        evaluator.compute_metrics(outputs, labels)
+        labels = labels.squeeze().cpu().numpy()  # BS, Z, H, W
+        evaluator.compute_metrics(outputs, labels, images, d['folder'], type)
 
     epoch_train_loss = sum(losses) / len(losses)
-    epoch_iou, epoch_dice = evaluator.mean_metric()
+    epoch_iou, epoch_dice, epoch_haus = evaluator.mean_metric(phase=type)
     if writer is not None:
         writer.add_scalar(f'Loss/{type}', epoch_train_loss, epoch)
-        writer.add_scalar(f'Metric/{type}', epoch_iou, epoch)
+        writer.add_scalar(f'{type}', epoch_iou, epoch)
 
     logging.info(
         f'{type} Epoch [{epoch}], '
         f'{type} Mean Loss: {epoch_train_loss}, '
         f'{type} Mean Metric (IoU): {epoch_iou}'
         f'{type} Mean Metric (Dice): {epoch_dice}'
+        f'{type} Mean Metric (haus): {epoch_haus}'
     )
 
     return epoch_train_loss, epoch_iou

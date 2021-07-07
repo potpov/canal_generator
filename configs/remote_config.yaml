@@ -5,8 +5,8 @@ tb_dir: '/nas/softechict-nas-2/mcipriano/runs'
 seed: 47
 # model configuration
 model:
-  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse
-  name: transUNet3DSparse
+  # model class, supported values: PadUNet, DeepLab, CAE, AE, PadUNetSparse, transUNet3DSparse, posUNet3D, posUNet3DSparse
+  name: posUNet3DSparse
 
 # trainer configuration
 trainer:

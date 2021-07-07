@@ -31,15 +31,18 @@ def main(experiment_name):
     assert torch.cuda.is_available()
     logging.info(f"This model will run on {torch.cuda.get_device_name(torch.cuda.current_device())}")
 
+    ## DETERMINISTIC SET-UP
     seed = config.get('seed', 47)
     torch.manual_seed(seed)
     np.random.seed(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    # END OF DETERMINISTIC SET-UP
 
     loader_config = config.get('data-loader', None)
     train_config = config.get('trainer', None)
     model_config = config.get('model')
 
-    num_classes = 1 if len(loader_config['labels']) <= 2 else len(loader_config['labels'])
     model, data_type = utils.load_model(config)
 
     ngpus = torch.cuda.device_count()
@@ -75,7 +78,7 @@ def main(experiment_name):
     else:
         scheduler = None
 
-    evaluator = Evaluator(loader_config)
+    evaluator = Evaluator(loader_config, project_dir)
 
     train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, data_type)
 
@@ -92,8 +95,6 @@ def main(experiment_name):
         except OSError as e:
             logging.info("No checkpoint exists from '{}'. Skipping...".format(train_config['checkpoint_path']))
 
-    vol_writer = utils.SimpleDumper(loader_config, experiment_name, project_dir) if args.dump_results else None
-
     if train_config['do_train']:
         writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name), purge_step=current_epoch)
 
@@ -108,14 +109,12 @@ def main(experiment_name):
         for epoch in range(current_epoch, train_config['epochs']):
 
             if data_type == "2D":
-                epoch_loss, _ = train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, warm_up[epoch])
-                val_iou, val_dice = test2D(model, val_loader, splitter, epoch, evaluator, loader_config, writer=writer)
+                train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, "Train", warm_up[epoch])
+                val_iou, val_dice, val_haus = test2D(model, val_loader, epoch, writer, evaluator, "Validation", splitter, loader_config)
             else:
-                epoch_loss, _ = train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="train")
-                val_iou, val_dice = test3D(model, val_loader, epoch, evaluator, loader_config, writer=writer)
-
-            logging.info(f'VALIDATION Epoch [{epoch}] - Mean Metric (iou): {val_iou} - (dice) {val_dice}')
-            writer.add_scalar('Metric/validation', val_iou, epoch)
+                train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train")
+                epoch_loss, _ = train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train")
+                val_iou, val_dice, val_haus = test3D(model, val_loader, epoch, writer, evaluator, type="Validation")
 
             if scheduler is not None:
                 if optim_name == 'SGD' and scheduler_name == 'Plateau':
@@ -135,29 +134,16 @@ def main(experiment_name):
 
             if epoch % 5 == 0:
                 if data_type == "2D":
-                    test_iou, test_dice = test2D(model, test_loader, splitter, train_config['epochs'] + 1, evaluator, loader_config)
+                    test_iou, _, _ = test2D(model, test_loader, epoch, writer, evaluator, "Test", splitter, loader_config)
                 else:
-                    test_iou, test_dice = test3D(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None)
-                logging.info(f'TEST Epoch [{epoch}] - Mean Metric (iou): {test_iou} - (dice) {test_dice}')
-                writer.add_scalar('Metric/Test', test_iou, epoch)
-                writer.add_scalar('Metric/Test_dice', test_dice, epoch)
+                    test_iou, _, _ = test3D(model, test_loader, epoch, writer, evaluator, type="Test")
 
-        logging.info('BEST METRIC IS {}'.format(best_metric))
-    else:
-        writer = SummaryWriter(log_dir=os.path.join(config['tb_dir'], experiment_name))  # do not purge if no training was performed
+        logging.info('BEST val METRIC IS {}'.format(best_metric))
 
     if data_type == "2D":
-        test_scores = test2D(model, test_loader, splitter, train_config['epochs'], evaluator, loader_config, writer=writer, dumper=vol_writer, final_mean=False)
+        test2D(model, test_loader, "Final", None, evaluator, "Final", splitter, loader_config)
     else:
-        test_scores = test3D(model, test_loader, train_config['epochs'] + 1, evaluator, loader_config, writer=None,
-                              dumper=vol_writer, skip_mean=True)
-
-    logging.info(f'final metric list: {test_scores}')
-    if len(test_scores) > 0:
-        logging.info(f'FINAL TEST - Mean Metric: {np.mean(test_scores)}')
-    if vol_writer is not None:
-        logging.info("going to create zip archive. wait the end of the run pls")
-        vol_writer.save_zip()
+        test3D(model, test_loader, epoch="Final", writer=None, evaluator=evaluator, type="Final")
 
 
 if __name__ == '__main__':

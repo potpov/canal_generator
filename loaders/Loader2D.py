@@ -10,6 +10,7 @@ from tqdm import tqdm
 from Jaw import Jaw
 import logging
 from utils import Splitter
+import utils
 
 
 class AlveolarDataloader(Dataset):
@@ -127,17 +128,16 @@ class AlveolarDataloader(Dataset):
         new_shape = np.array((D, H, W)) / pad_factor
         new_shape = np.round(new_shape).astype(np.int)
 
+        # suppress areas out of the splines
+        data = utils.aided_background_suppression(data, sparse_gt)
+
         data = CenterPad(new_shape)(data)
 
-        # suppress areas out of the splines
-        # if self.config.get('background_suppression', True):
-        #     data = utils.background_suppression(data, folder)
-        #
-        #     # cut the overflowing null areas -> extract cube with extreme limits of where are the values != 0
-        #     xs, ys, zs = np.where(data != 0)
-        #     data = data[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
-        #     if partition == 'train':
-        #         gt = gt[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
+        # cut the overflowing null areas -> extract cube with extreme limits of where are the values != 0
+        # xs, ys, zs = np.where(data != 0)
+        # data = data[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
+        # if partition == 'train':
+        #     gt = gt[min(xs):max(xs) + 1, min(ys):max(ys) + 1, min(zs):max(zs) + 1]
 
         data = Rescale(size=self.reshape_size)(data)
 

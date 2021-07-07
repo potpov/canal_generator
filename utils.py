@@ -19,7 +19,7 @@ from Jaw import Jaw
 import torch
 import zipfile
 import json
-from models.PadUNet3D import TransUNet3D
+from models.PadUNet3D import TransUNet3D, PositionalpadUNet3D
 
 
 def create_split(dataset_path):
@@ -168,7 +168,7 @@ def load_dataset(config, train_type="2D"):
             collate_fn=alveolar_data.custom_collate
         )
     elif train_type == "3D":
-        data_utils = NewLoader(loader_config, train_config.get("do_train", True), train_config.get("use_syntetic", True))
+        data_utils = NewLoader(loader_config, train_config.get("do_train", True))
         train_d, test_d, val_d = data_utils.split_dataset()
         splitter = None
         samples_per_volume = int(
@@ -209,8 +209,12 @@ def load_model(config):
     elif name == 'AE':
         emb_shape = [dim // 64 for dim in loader_config['resize_shape'][-2:]]
         return AE(num_classes, emb_shape), "2D"
-    if name == 'UNet':
-        return UNet(num_classes=num_classes), "2D"
+    elif name == 'posUNet3D':
+        emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
+        return PositionalpadUNet3D(n_classes=num_classes, emb_shape=emb_shape), "3D"
+    elif name == 'posUNet3DSparse':
+        emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
+        return PositionalpadUNet3D(n_classes=num_classes, emb_shape=emb_shape, in_ch=2), "3D"
     elif name == 'transUNet3D':
         emb_shape = [dim // 8 for dim in loader_config['patch_shape']]
         return TransUNet3D(n_classes=num_classes, emb_shape=emb_shape), "3D"
@@ -441,6 +445,25 @@ def arch_lines(func, start, end, offset=50):
 
     return low_offset, coords, high_offset, derivative
 
+
+def aided_background_suppression(data, sparse):
+    # regression polynomial function
+    coords = np.argwhere(sparse == 1)
+    y, x = list(coords[:, 1]), list(coords[:, 2])
+    try:
+        pol = np.polyfit(x, y, 8)
+        p = np.poly1d(pol)
+    except np.RankWarning:
+        pass
+
+    f, start, end = p, min(x), max(x)
+    mask = paralines_mask(f, start, end, slice_dim=(data.shape[-2:]), offset=40)
+    # suppressing data below the lowest point in the spline
+    minimum = f(start) if f(start) > f(end) else f(end)
+    mask[int(minimum):, :] = False
+
+    data[:, np.bitwise_not(mask)] = 0  # using mask to suppress data
+    return data
 
 def background_suppression(data, folder):
     """
