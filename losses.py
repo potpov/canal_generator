@@ -2,33 +2,33 @@ import numpy as np
 import torch
 from torch import nn
 import torch.nn.functional as F
-from topologylayer.nn import LevelSetLayer2D
-from topologylayer.nn.features import get_raw_barcode_lengths
+# from topologylayer.nn import LevelSetLayer2D
+# from topologylayer.nn.features import get_raw_barcode_lengths
 
 
-class TopLoss2D(nn.Module):
-    def __init__(self, size, expected=1):
-        super(TopLoss2D, self).__init__()
-        self.size = size
-        self.expected = expected
-        self.pdfn = LevelSetLayer2D(self.size, maxdim=1, sublevel=False, complex='grid')
-
-    def forward(self, data):
-        assert data.shape[-2:] == self.size, 'check the shape!'
-        loss = 0
-        for img in data:
-
-            dgminfo = self.pdfn(img)
-            holes = dgminfo[0][1]
-            holes[holes[:, 1] == -np.inf, 1] = 0  # fix the longest components bug (is it a real bug?)
-            lenghts = get_raw_barcode_lengths(holes, False)  # get lens
-            lenghts[lenghts != lenghts] = 0
-            sortl, _ = torch.sort(lenghts, descending=True)  # from the biggest to the shortes
-
-            L0 = (1. - sortl[:self.expected] ** 2).sum()
-            L01 = torch.sum(sortl[self.expected:10] ** 2)
-            loss = loss + L0 + L01
-        return loss
+# class TopLoss2D(nn.Module):
+#     def __init__(self, size, expected=1):
+#         super(TopLoss2D, self).__init__()
+#         self.size = size
+#         self.expected = expected
+#         self.pdfn = LevelSetLayer2D(self.size, maxdim=1, sublevel=False, complex='grid')
+#
+#     def forward(self, data):
+#         assert data.shape[-2:] == self.size, 'check the shape!'
+#         loss = 0
+#         for img in data:
+#
+#             dgminfo = self.pdfn(img)
+#             holes = dgminfo[0][1]
+#             holes[holes[:, 1] == -np.inf, 1] = 0  # fix the longest components bug (is it a real bug?)
+#             lenghts = get_raw_barcode_lengths(holes, False)  # get lens
+#             lenghts[lenghts != lenghts] = 0
+#             sortl, _ = torch.sort(lenghts, descending=True)  # from the biggest to the shortes
+#
+#             L0 = (1. - sortl[:self.expected] ** 2).sum()
+#             L01 = torch.sum(sortl[self.expected:10] ** 2)
+#             loss = loss + L0 + L01
+#         return loss
 
 
 def jaccard(outputs, targets, per_image=False, non_empty=False, min_pixels=5):
@@ -71,6 +71,7 @@ def kl_loss(mu, logvar):
     # kl = -0.5*torch.sum(1+logvar-mu.pow(2)-logvar.exp())
     return kl_loss
 
+
 class JaccardLoss(torch.nn.Module):
     def __init__(self, weight=None, size_average=True, per_image=False, non_empty=False, apply_sigmoid=False,
                  min_pixels=5):
@@ -86,6 +87,7 @@ class JaccardLoss(torch.nn.Module):
         if self.apply_sigmoid:
             input = torch.sigmoid(input)
         return jaccard(input, target, per_image=self.per_image, non_empty=self.non_empty, min_pixels=self.min_pixels)
+
 
 def DiceLossv2(true, logits, eps=1e-7):
     """Computes the Sørensen–Dice loss.
@@ -202,16 +204,16 @@ class LossFn:
             return DiceLoss(self.classes, self.device)(pred, gt)
         elif name == 'DiceLossv2':
             return DiceLossv2(gt, pred)
-        elif name == 'TopoLoss':
-            # pred = nn.Sigmoid()(pred)  # i want probabilities - this makes the method unsuitable for multiclass!
-            pred = F.softmax(pred, dim=1)
-
-            contour_idxs = np.argwhere(np.sum(gt.cpu().numpy() == self.classes['CONTOUR'], axis=tuple(np.arange(1, gt.ndim))) > 0).squeeze()
-
-            contour_loss = TopLoss2D(gt.shape[-2:], expected=1)
-            topoloss = contour_loss(pred[contour_idxs[:4], self.classes['CONTOUR']].squeeze())
-
-            return 0.1 * topoloss
+        # elif name == 'TopoLoss':
+        #     # pred = nn.Sigmoid()(pred)  # i want probabilities - this makes the method unsuitable for multiclass!
+        #     pred = F.softmax(pred, dim=1)
+        #
+        #     contour_idxs = np.argwhere(np.sum(gt.cpu().numpy() == self.classes['CONTOUR'], axis=tuple(np.arange(1, gt.ndim))) > 0).squeeze()
+        #
+        #     contour_loss = TopLoss2D(gt.shape[-2:], expected=1)
+        #     topoloss = contour_loss(pred[contour_idxs[:4], self.classes['CONTOUR']].squeeze())
+        #
+        #     return 0.1 * topoloss
 
         elif name == 'MSE':
             loss_fn = torch.nn.MSELoss()

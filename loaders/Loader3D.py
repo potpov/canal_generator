@@ -3,7 +3,7 @@ import numpy as np
 from torchvision import transforms
 import os
 from matplotlib import pyplot as plt
-from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale
+from augmentations import CropAndPad, RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale
 import torch
 import json
 from tqdm import tqdm
@@ -14,7 +14,7 @@ import utils
 
 class NewLoader():
 
-    def __init__(self, config, do_train=True):
+    def __init__(self, config, do_train=True, inference=False):
 
         self.config = config
 
@@ -39,7 +39,9 @@ class NewLoader():
         reshape_size = self.config.get('resize_shape', (152, 224, 256))
         self.reshape_size = tuple(reshape_size) if type(reshape_size) == list else reshape_size
 
-        with open(config.get('split_filepath', '/homes/mcipriano/projects/alveolar_canal_3Dtraining/configs/splits.json')) as f:
+        split_filepath = config.get('split_filepath')
+        logging.info(f"split filepath is {split_filepath}")
+        with open(split_filepath) as f:
             folder_splits = json.load(f)
 
         if not do_train:
@@ -51,9 +53,12 @@ class NewLoader():
             logging.info(f"loading data for {partition}, tot: ({len(folders)}")
             for patient_num, folder in tqdm(enumerate(folders), total=len(folders)):
 
-                data_path = os.path.join(config['file_path'], folder, 'data.npy')
+                data_path = os.path.join(config['sparse_path'], folder, 'data.npy')
                 sparse_path = os.path.join(config['sparse_path'], folder, 'gt_sparse.npy')
                 gt_path = os.path.join(config['file_path'], folder, gt_filename)
+
+                if inference:
+                    gt_path = sparse_path
 
                 data = np.load(data_path)
                 sparse = np.load(sparse_path)
@@ -87,30 +92,21 @@ class NewLoader():
         data = np.clip(data, self.dicom_min, self.dicom_max)
         data = (data.astype(np.float) + self.dicom_min) / (self.dicom_max + self.dicom_min)   # [0-1] with shifting
 
-        D, H, W = data.shape[-3:]
-        rD, rH, rW = self.reshape_size
-        tmp_ratio = np.array((D/W, H/W, 1))
-        pad_factor = tmp_ratio / np.array((rD/rW, rH/rW, 1))
-        pad_factor /= np.max(pad_factor)
-        new_shape = np.array((D, H, W)) / pad_factor
-        new_shape = np.round(new_shape).astype(np.int)
+        safe_gt_check = np.sum(gt)
+        data = CropAndPad(self.reshape_size)(data)
+        gt = CropAndPad(self.reshape_size, pad_val=self.config['labels']['BACKGROUND'])(gt)
+        sparse = CropAndPad(self.reshape_size, pad_val=self.config['labels']['BACKGROUND'])(sparse)
+        assert safe_gt_check == np.sum(gt), f"we are missing some GT voxel with this crop! {folder}, {partition}"
 
-        data = utils.aided_background_suppression(data, sparse)
-
-        data = CenterPad(new_shape)(data)
-        data = Rescale(size=self.reshape_size)(data)
-
-        sparse = CenterPad(new_shape)(sparse, pad_val=self.config['labels']['BACKGROUND'])
-        sparse = Rescale(size=self.reshape_size, interp_fn='nearest')(sparse)
+        gt = gt.astype(np.uint8)
+        sparse = sparse.astype(np.uint8)
 
         # creating channel axis and making it RGB (we need 4th dim array for torchio here)
         if data.ndim == 3: data = np.tile(data.reshape(1, *data.shape), (3, 1, 1, 1))
         if sparse.ndim == 3: sparse = sparse.reshape(1, *sparse.shape)
+        if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
 
         if partition in ['train']:
-            gt = CenterPad(new_shape)(gt)
-            gt = Rescale(size=self.reshape_size, interp_fn='nearest')(gt)
-            if gt.ndim == 3: gt = gt.reshape(1, *gt.shape)
             return tio.Subject(
                 data=tio.ScalarImage(tensor=data),
                 label=tio.LabelMap(tensor=gt),

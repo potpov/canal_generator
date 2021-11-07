@@ -10,16 +10,13 @@ import cv2
 import yaml
 from torch.utils.data import SubsetRandomSampler
 import torch.utils.data as data
-from models.PadUNet import UNet as PadUNet
-from models.Deeplab.decoder import DeepLab
-from models.CAE import CAE, AE
 import sys
 import pathlib
 from Jaw import Jaw
 import torch
 import zipfile
 import json
-from models.PadUNet3D import TransUNet3D, PositionalpadUNet3D
+
 
 
 def create_split(dataset_path):
@@ -128,7 +125,7 @@ def load_config_yaml(config_file):
     return yaml.load(open(config_file, 'r'), yaml.FullLoader)
 
 
-def load_dataset(config, train_type="2D"):
+def load_dataset(config, train_type="2D", is_inference=False):
 
     from loaders.Loader2D import AlveolarDataloader
     from loaders.Loader3D import NewLoader
@@ -136,18 +133,21 @@ def load_dataset(config, train_type="2D"):
     loader_config = config.get('data-loader', None)
     train_config = config.get('trainer', None)
 
+    train_loader, test_loader, val_loader = None, None, None
+
     if train_type == "2D":
         alveolar_data = AlveolarDataloader(config=loader_config)
         train_id, test_id, val_id = alveolar_data.split_dataset()
         splitter = alveolar_data.get_splitter()
-        train_loader = data.DataLoader(
-            alveolar_data,
-            batch_size=loader_config['batch_size'],
-            sampler=SubsetRandomSampler(train_id),
-            num_workers=loader_config['num_workers'],
-            pin_memory=True,
-            drop_last=True,
-        )
+        if config['trainer']['do_train']:
+            train_loader = data.DataLoader(
+                alveolar_data,
+                batch_size=loader_config['batch_size'],
+                sampler=SubsetRandomSampler(train_id),
+                num_workers=loader_config['num_workers'],
+                pin_memory=True,
+                drop_last=True,
+            )
         test_loader = data.DataLoader(
             alveolar_data,
             batch_size=loader_config['batch_size'],
@@ -168,21 +168,21 @@ def load_dataset(config, train_type="2D"):
             collate_fn=alveolar_data.custom_collate
         )
     elif train_type == "3D":
-        data_utils = NewLoader(loader_config, train_config.get("do_train", True))
+        data_utils = NewLoader(loader_config, train_config.get("do_train", True), is_inference)
         train_d, test_d, val_d = data_utils.split_dataset()
         splitter = None
-        samples_per_volume = int(
-            np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
+        if config['trainer']['do_train'] and not is_inference:
+            samples_per_volume = int(np.prod([np.round(i / j) for i, j in zip(loader_config['resize_shape'], loader_config['patch_shape'])]))
 
-        train_queue = tio.Queue(
-            train_d,
-            max_length=samples_per_volume * 4,  # queue len
-            samples_per_volume=samples_per_volume,
-            sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'),
-                                           loader_config.get('grid_overlap', 0)),
-            num_workers=loader_config['num_workers'],
-        )
-        train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0)
+            train_queue = tio.Queue(
+                train_d,
+                max_length=samples_per_volume * 4,  # queue len
+                samples_per_volume=samples_per_volume,
+                sampler=data_utils.get_sampler(loader_config.get('sampler_type', 'grid'), loader_config.get('grid_overlap', 0)),
+                num_workers=loader_config['num_workers'],
+            )
+            train_loader = data.DataLoader(train_queue, loader_config['batch_size'], num_workers=0)
+
         test_loader = [(test_p, data.DataLoader(test_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for test_p in test_d]
         val_loader = [(val_p, data.DataLoader(val_p, loader_config['batch_size'], num_workers=loader_config['num_workers'])) for val_p in val_d]
     else:
@@ -192,6 +192,12 @@ def load_dataset(config, train_type="2D"):
 
 
 def load_model(config):
+
+    from models.PadUNet import UNet as PadUNet
+    from models.Deeplab.decoder import DeepLab
+    from models.CAE import CAE, AE
+    from models.PadUNet3D import TransUNet3D, PositionalpadUNet3D
+
     model_config = config.get('model')
     loader_config = config.get('data-loader')
     loss_config = config.get('loss')

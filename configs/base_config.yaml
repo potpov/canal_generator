@@ -35,7 +35,7 @@ data-loader:
   num_workers: 4
   file_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES'
   sparse_path: '/nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE'
-  split_filepath: '/homes/mcipriano/projects/alveolar_canal_2D_CAE/configs/splits.json'
+  split_filepath: '/nas/softechict-nas-2/mcipriano/splits/generator_training.json'
 
   volumes_min: 0
 

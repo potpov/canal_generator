@@ -24,7 +24,7 @@ binary_labels = {
 
 EXCELL_PATH = '/homes/mcipriano/experiments.xlsx'
 SBATCH_OUTDIR = '/homes/mcipriano/sbatch_scripts/generated_sbatch.sh'
-SRUN_COMMAND = '$python -u /homes/mcipriano/projects/alveolar_canal_2D_CAE/main.py --base_config '
+SRUN_COMMAND = '$python -u /homes/mcipriano/projects/canal_generator/main.py --base_config '
 EXPERIMENT_DIR = '/nas/softechict-nas-2/mcipriano/results/maxillo/3D/'
 EXCLUDED_COLUMNS = ['todo', 'num_labels', 'best_score', 'title', 'date', 'note', 'test_patients_id']  # those excell values dont go to the yaml
 

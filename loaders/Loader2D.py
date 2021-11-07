@@ -3,7 +3,7 @@ import numpy as np
 from torchvision import transforms
 import os
 from matplotlib import pyplot as plt
-from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomVerticalFlip, Resize, Rescale
+from augmentations import RandomRotate, RandomContrast, ElasticDeformation, Normalize, ToTensor, CenterPad, RandomHorizontalFlip, Resize, Rescale
 import torch
 import json
 from tqdm import tqdm
@@ -42,8 +42,8 @@ class AlveolarDataloader(Dataset):
         self.dicom_min = config.get('volumes_min', 0)
 
         self.augmentation = transforms.Compose([
-            RandomRotate(execution_probability=0.5, order=4),
-            RandomVerticalFlip(execution_probability=0.7),
+            # RandomRotate(execution_probability=0.5, order=4),
+            RandomHorizontalFlip(execution_probability=0.7),
             # RandomContrast(execution_probability=0.5),
             # ElasticDeformation(execution_probability=0.2),
         ])
@@ -59,7 +59,9 @@ class AlveolarDataloader(Dataset):
         self.means = []
         self.stds = []
 
-        with open(config.get('split_filepath')) as f:
+        split_filepath = config.get('split_filepath')
+        logging.info(f"split filepath is {split_filepath}")
+        with open(split_filepath) as f:
             folder_splits = json.load(f)
 
         for partition, folders in folder_splits.items():
@@ -129,7 +131,8 @@ class AlveolarDataloader(Dataset):
         new_shape = np.round(new_shape).astype(np.int)
 
         # suppress areas out of the splines
-        data = utils.aided_background_suppression(data, sparse_gt)
+        if self.config.get('background_suppression', False):
+            data = utils.aided_background_suppression(data, sparse_gt)
 
         data = CenterPad(new_shape)(data)
 
@@ -160,9 +163,10 @@ class AlveolarDataloader(Dataset):
         vol, gt = self.patients['data'][index].astype(np.float32), self.patients['gt'][index].astype(np.int64)
         sparse_gt = self.patients['sparse_gt'][index].astype(np.float32)
 
-        # if index in self.indices['train']:
-        #     vol, gt = self.augmentation([vol, gt])
-        #     assert np.array_equal(gt, gt.astype(bool)), 'something wrong with augmentations here'
+        if index in self.indices['train']:
+            vol, gt = self.augmentation([vol, gt])
+            assert np.array_equal(gt, gt.astype(bool)), 'something wrong with augmentations here'
+
         vol = transforms.Normalize(self.mean, self.std)(ToTensor()(vol.copy()))
         gt = ToTensor()(gt.copy())
         sparse_gt = ToTensor()(sparse_gt.copy())

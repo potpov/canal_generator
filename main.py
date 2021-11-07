@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 import utils
 from eval import Eval as Evaluator
 from losses import LossFn
-from test import test2D, test3D
+from test import test2D, test3D, inference
 from train import train2D, train3D
 import sys
 import logging
@@ -16,6 +16,8 @@ import torch.nn as nn
 import numpy as np
 from os import path
 import socket
+import random
+
 
 def save_weights(epoch, model, optim, score, path):
     state = {
@@ -26,7 +28,8 @@ def save_weights(epoch, model, optim, score, path):
     }
     torch.save(state, path)
 
-def main(experiment_name):
+
+def main(experiment_name, args):
 
     assert torch.cuda.is_available()
     logging.info(f"This model will run on {torch.cuda.get_device_name(torch.cuda.current_device())}")
@@ -35,6 +38,7 @@ def main(experiment_name):
     seed = config.get('seed', 47)
     torch.manual_seed(seed)
     np.random.seed(seed)
+    random.seed(seed)
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     # END OF DETERMINISTIC SET-UP
@@ -80,7 +84,7 @@ def main(experiment_name):
 
     evaluator = Evaluator(loader_config, project_dir)
 
-    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, data_type)
+    train_loader, test_loader, val_loader, splitter = utils.load_dataset(config, data_type, args.is_inference)
 
     loss = LossFn(config.get('loss'), loader_config, weights=None)
 
@@ -110,28 +114,36 @@ def main(experiment_name):
 
             if data_type == "2D":
                 train2D(model, train_loader, loss, optimizer, epoch, writer, evaluator, "Train", warm_up[epoch])
-                val_iou, val_dice, val_haus = test2D(model, val_loader, epoch, writer, evaluator, "Validation", splitter, loader_config)
             else:
                 train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train")
-                epoch_loss, _ = train3D(model, train_loader, loss, optimizer, epoch, writer, evaluator, type="Train")
-                val_iou, val_dice, val_haus = test3D(model, val_loader, epoch, writer, evaluator, type="Validation")
 
-            if scheduler is not None:
-                if optim_name == 'SGD' and scheduler_name == 'Plateau':
-                    scheduler.step(val_iou)
+            save_weights(epoch, model, optimizer, 0, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+
+            ######
+            # VALIDATION EVERY TWO EPOCHES
+
+            if epoch % 2 == 0:
+                if data_type == "2D":
+                    val_iou, val_dice, val_haus = test2D(model, val_loader, epoch, writer, evaluator, "Validation", splitter, loader_config)
                 else:
-                    scheduler.step(current_epoch)
+                    val_iou, val_dice, val_haus = test3D(model, val_loader, epoch, writer, evaluator, type="Validation")
 
-            if val_iou > best_metric:
-                best_metric = val_iou
-                save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
+                if scheduler is not None:
+                    if optim_name == 'SGD' and scheduler_name == 'Plateau':
+                        scheduler.step(val_iou)
+                    else:
+                        scheduler.step(epoch)
 
-            if val_iou < 1e-05 and epoch > 10:
-                logging.info('drop in performances detected. aborting the experiment')
-                return 0
-            else:  # save current weights for debug, overwrite the same file
-                save_weights(epoch, model, optimizer, val_iou, os.path.join(project_dir, 'checkpoints', 'last.pth'))
+                if val_iou > best_metric:
+                    best_metric = val_iou
+                    save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
 
+                if val_iou < 1e-05 and epoch > 10:
+                    logging.info('drop in performances detected. aborting the experiment')
+                    return 0
+
+            #####
+            # TEST EVERY FIVE EPOCHES
             if epoch % 5 == 0:
                 if data_type == "2D":
                     test_iou, _, _ = test2D(model, test_loader, epoch, writer, evaluator, "Test", splitter, loader_config)
@@ -140,7 +152,10 @@ def main(experiment_name):
 
         logging.info('BEST val METRIC IS {}'.format(best_metric))
 
-    if data_type == "2D":
+    if args.is_inference:
+        assert data_type == "3D", "inference not implemented for 2D"
+        inference(model, test_loader)
+    elif data_type == "2D":
         test2D(model, test_loader, "Final", None, evaluator, "Final", splitter, loader_config)
     else:
         test3D(model, test_loader, epoch="Final", writer=None, evaluator=evaluator, type="Final")
@@ -156,8 +171,8 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument('--base_config', default="config.yaml", help='path to the yaml config file')
     arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected, default: false")
-    arg_parser.add_argument('--dump_results', action='store_true', help="dump test data, default: false")
     arg_parser.add_argument('--test', action='store_true', help="set up test params, default: false")
+    arg_parser.add_argument('--is_inference', action='store_true', help="this is the flag for the syntetic dataset generation, default: false")
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config
@@ -190,4 +205,4 @@ if __name__ == '__main__':
         config['data-loader']['num_workers'] = 0
         config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
 
-    main(experiment_name)
+    main(experiment_name, args)
