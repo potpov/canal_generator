@@ -194,7 +194,7 @@ class NewLoader():
 
         return [c / len(self.patients['gt']) for c in class_pixel_count]
 
-    def  median_frequency_balancing(self):
+    def median_frequency_balancing(self):
         """
         Computes class weights using Median Frequency Balancing.
         Source paper: https://arxiv.org/pdf/1411.4734.pdf (par. 6.3.2)

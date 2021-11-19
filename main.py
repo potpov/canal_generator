@@ -139,8 +139,8 @@ def main(experiment_name, args):
                     save_weights(epoch, model, optimizer, best_metric, os.path.join(project_dir, 'best.pth'))
 
                 if val_iou < 1e-05 and epoch > 10:
-                    logging.info('drop in performances detected. aborting the experiment')
-                    return 0
+                    logging.info('drop in performances detected')
+                    # return 0
 
             #####
             # TEST EVERY FIVE EPOCHES
@@ -173,6 +173,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--verbose', action='store_true', help="if true sdout is not redirected, default: false")
     arg_parser.add_argument('--test', action='store_true', help="set up test params, default: false")
     arg_parser.add_argument('--is_inference', action='store_true', help="this is the flag for the syntetic dataset generation, default: false")
+    arg_parser.add_argument('--reload', action='store_true', help="reload, default: false")
 
     args = arg_parser.parse_args()
     yaml_path = args.base_config
@@ -204,5 +205,9 @@ if __name__ == '__main__':
         config['trainer']['do_train'] = False
         config['data-loader']['num_workers'] = 0
         config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'best.pth')
+
+    if args.reload:
+        logging.info("RELOAD! setting checkpoint path to last.pth")
+        config['trainer']['checkpoint_path'] = os.path.join(project_dir, 'checkpoints', 'last.pth')
 
     main(experiment_name, args)
