@@ -71,15 +71,6 @@ In addiction we created a factory for Augmentation which allows you to load augm
 the following example can help you to make your own file. In our experiments we just used RandomFlip on all axes.
 
 ```yaml
-data-loader:
-  augmentations_file: /homes/mcipriano/sbatch_scripts/augmentations_files/3.yaml
-  background_suppression: 0
-  batch_size: 2
-  file_path: /nas/softechict-nas-2/mcipriano/datasets/maxillo/VOLUMES
-  labels:
-    BACKGROUND: 0
-    INSIDE: 1
-  mean: 0.08435
 RandomAffine:
   scales: !!python/tuple [0.8, 1.2]
   degrees: !!python/tuple [15, 15]
