@@ -19,7 +19,7 @@ optional arguments:
 ```
 
 ## YAML config example
-Here is an example of a yaml file to use as base_config. The following is the yaml file used in the experiment which obtained the best values 
+Here is an example of a yaml file to use as base_config. The following is the yaml file used in the experiment which obtained the best values.
 
 ```yaml
 data-loader:
@@ -80,44 +80,20 @@ data-loader:
     BACKGROUND: 0
     INSIDE: 1
   mean: 0.08435
-  num_workers: 4
-  patch_shape:
-  - 120
-  - 120
-  - 120
-  resize_shape:
-  - 168
-  - 280
-  - 360
-  sparse_path: /nas/softechict-nas-2/mcipriano/datasets/maxillo/SPARSE
-  split_filepath: /nas/softechict-nas-2/mcipriano/splits/generator_training.json
-  split_volumes:
-  - 1
-  - 320
-  - 2
-  std: 0.17885
-  volumes_max: 2100
-  volumes_min: 0
-  weights:
-  - 0.000703
-  - 0.999
-loss:
-  name: Jaccard
-lr_scheduler:
-  name: Plateau
-model:
-  name: posUNet3DSparse
-optimizer:
-  learning_rate: 0.1
-  name: SGD
-seed: 47
-tb_dir: /nas/softechict-nas-2/mcipriano/runs
-title: 6GK1I26CS_CROP
-trainer:
-  checkpoint_path: null
-  do_train: true
-  epochs: 90
-  validate_after_iters: 2
+RandomAffine:
+  scales: !!python/tuple [0.8, 1.2]
+  degrees: !!python/tuple [15, 15]
+  isotropic: false
+  image_interpolation: linear
+  p: 0.35
+RandomElasticDeformation:
+    num_control_points: 7
+    p: 0.35
+RandomFlip:
+  axes: 2
+  flip_probability: 0.7
+RandomBlur:
+  p: 0.25
 ```
 
 ## Directories
