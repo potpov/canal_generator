@@ -13,19 +13,9 @@ usage: main.py [--base_config path]
 optional arguments:
   --base_config         path to your config.yaml for this experiment
   --verbose             redirect stream to std out instead of using a log file in the yaml directory
-  --competitor          load training data as circle expansion instead of dense annotations
-  --additional_dataset  load the additional patients
   --test                skip the training and load best weights for the experiment (no needs to update your yaml file)
-  --skip_dump           if this flag is set the network does not dump prediction volumes on the final test
+  --is_inference        set this flag when you want to create the new deep expansion dataset
   --reload              load the last weights and continue the training (no needs to update your yaml file)
-```
-
-Optional Arguments for the distributed data parallel. note, you must configure your slurm sbatch file to use it
-
-```
---local_rank              
---dist-backend              
---dist-url
 ```
 
 ## YAML config example
