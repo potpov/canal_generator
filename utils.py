@@ -471,6 +471,7 @@ def aided_background_suppression(data, sparse):
     data[:, np.bitwise_not(mask)] = 0  # using mask to suppress data
     return data
 
+
 def background_suppression(data, folder):
     """
     detect the best spline from a set of 40 central slices of the volume,
